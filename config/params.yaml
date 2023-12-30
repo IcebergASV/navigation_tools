@@ -1,0 +1,9 @@
+# object_avoidance
+start_pos_x: 0.0 
+start_pos_y: 0.0 
+end_pos_x: 10.0
+end_pos_y: 10.0
+
+avoid_left: true
+
+safety_dist: 1.0

@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="navigation_tools" type="object_avoidance" name="object_avoidance_node" output="screen">
+        <rosparam file="$(find navigation_tools)/config/params.yaml" command="load" />
+    </node>
+</launch>

@@ -10,6 +10,13 @@ project(navigation_tools)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  geometry_msgs
+  message_generation
+  prop_mapper
+  geographic_msgs
+  sensor_msgs
+  mavros_msgs
+  task_master
 )
 
 ## System dependencies are found with CMake's conventions
@@ -48,8 +55,6 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 # add_message_files(
 #   FILES
-#   Message1.msg
-#   Message2.msg
 # )
 
 ## Generate services in the 'srv' folder
@@ -69,7 +74,11 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate added messages and services with any dependencies listed here
 # generate_messages(
 #   DEPENDENCIES
+#   geometry_msgs
 #   std_msgs
+#   prop_mapper
+#   geographic_msgs
+#   task_master
 # )
 
 ################################################
@@ -118,6 +127,12 @@ include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
 )
+
+add_executable(object_avoidance src/object_avoidance.cpp)
+add_dependencies(object_avoidance ${object_avoidance_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(object_avoidance
+   ${catkin_LIBRARIES}
+ )
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
