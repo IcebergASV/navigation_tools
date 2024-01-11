@@ -30,6 +30,7 @@ public:
 
         // ROS publishers
         waypoint_ = nh_.advertise<task_master::TaskGoalPosition>("task_goal_position", 10);
+        prop_map_pub_ = nh_.advertise<prop_mapper::PropArray>("props", 10); // publish our prop from params
     }
 
     void spin() {
@@ -46,7 +47,9 @@ public:
         obstacle.prop_label = "no obstacle"; // if we find no obstacle, return a prop with this label
         double dist_to_obstacle = 1000; // set arbitrarily high distance
         // get bounding box for 'danger zone'
+        ROS_DEBUG_STREAM("BEFORE GET HEADING.");
         double heading = getGazeboHeading(current_pos_.pose.pose.orientation); // in radians
+        ROS_DEBUG_STREAM("AFTER GET HEADING.");
         double theta;
         double gamma;
         double a_x;
@@ -59,6 +62,7 @@ public:
         double c_y;
 
         if (heading < M_PI_2) {
+            ROS_DEBUG_STREAM("heading < 90deg.");
             theta = heading;
             gamma = M_PI_2 - theta;
             a_x = current_pos_.pose.pose.position.x - (1.335 * sin(gamma));
@@ -69,8 +73,10 @@ public:
             d_y = current_pos_.pose.pose.position.y + (1.335 * sin(theta));
             c_x = d_x - (5 * sin(theta));
             c_y = d_y + (5 * cos(theta));
+            ROS_DEBUG_STREAM("a = " << a_x << "," << a_y << ", b = " << b_x << "," << b_y << ", c = " << c_x << "," << c_y << ", d = " << d_x << "," << d_y);
         }
         else if (heading >= M_PI_2 && heading < M_PI) {
+            ROS_DEBUG_STREAM("90deg < heading < 180deg.");
             theta = M_PI - heading;
             gamma = M_PI_2 - theta;
             a_x = current_pos_.pose.pose.position.x + (1.335 * cos(theta));
@@ -83,6 +89,7 @@ public:
             c_y = d_y - (5 * sin(gamma));
         }
         else if (heading >= M_PI && heading < (M_PI+M_PI_2)) {
+            ROS_DEBUG_STREAM("180deg < heading < 270deg.");
             theta = heading - M_PI;
             gamma = M_PI_2 - theta;
             a_x = current_pos_.pose.pose.position.x + (1.335 * sin(gamma));
@@ -95,6 +102,7 @@ public:
             c_y = d_y - (5 * cos(gamma));
         }
         else { //  heading between 3PI/2 and 2PI
+        ROS_DEBUG_STREAM("270deg < heading < 360deg.");
             theta =  2*M_PI - heading;
             gamma = M_PI_2 - theta;
             a_x = current_pos_.pose.pose.position.x - (1.335 * cos(theta));
@@ -109,18 +117,29 @@ public:
 
 
         for (int i = 0; i < sizeof(props_.props); i++) {
+            ROS_DEBUG_STREAM("in for-loop.");
             if (props_.props[i].prop_label == "obstacle") {
+                ROS_DEBUG_STREAM("found obstacle");
                 double p_x = props_.props[i].vector.x;
                 double p_y = props_.props[i].vector.y;
+                double alp, bet, gam, del;
+
                 // determine barycentric coordinates
-                double bary_a = ((c_y-d_y)*(p_x-d_x)+(d_x-c_x)*(p_y-d_y))/((c_y-d_y)*(a_x-d_x)+(d_x-c_x)*(a_y-d_y));
-                double bary_b = ((d_y-a_y)*(p_x-d_x)+(a_x-d_x)*(p_y-d_y))/((c_y-d_y)*(a_x-d_x)+(d_x-c_x)*(a_y-d_y));
-                double bary_c = ((a_y-b_y)*(p_x-a_x)+(b_x-a_x)*(p_y-a_y))/((a_y-b_y)*(c_x-a_x)+(b_x-a_x)*(c_y-a_y));
-                double bary_d = ((b_y-c_y)*(p_x-a_x)+(c_x-a_x)*(p_y-a_y))/((a_y-b_y)*(c_x-a_x)+(b_x-a_x)*(c_y-a_y));
+                //double bary_a = ((c_y-d_y)*(p_x-d_x)+(d_x-c_x)*(p_y-d_y))/((c_y-d_y)*(a_x-d_x)+(d_x-c_x)*(a_y-d_y));
+                //double bary_b = ((d_y-a_y)*(p_x-d_x)+(a_x-d_x)*(p_y-d_y))/((c_y-d_y)*(a_x-d_x)+(d_x-c_x)*(a_y-d_y));
+                //double bary_c = ((a_y-b_y)*(p_x-a_x)+(b_x-a_x)*(p_y-a_y))/((a_y-b_y)*(c_x-a_x)+(b_x-a_x)*(c_y-a_y));
+                //double bary_d = ((b_y-c_y)*(p_x-a_x)+(c_x-a_x)*(p_y-a_y))/((a_y-b_y)*(c_x-a_x)+(b_x-a_x)*(c_y-a_y));
+
+                cartesianToBarycentric(p_x, p_y, a_x, a_y, b_x, b_y, c_x, c_y, d_x, d_y, alp, bet, gam, del);
+
                 // if prop within 5 meters of the front of the boat and prop label == 'obstacle' and distance to the obstacle < dist_to_obstacle
                     // then props_[i] is the closest obstacle to the boat
                 // if a,b,c,d between 0 and 1 and a+b+c+d=1, then prop is an obstacle that needs to be avoided
-                if (bary_a>=0 && bary_a<=1 && bary_b>=0 && bary_b<=1 && bary_c>=0 && bary_c<=1 && bary_d>=0 && bary_d<=1 && bary_a+bary_b+bary_c+bary_d>0.99 && bary_a+bary_b+bary_c+bary_d<1.01) { // range should be set as a parameter
+                ROS_DEBUG_STREAM("found barycentric co-ords");
+                ROS_DEBUG_STREAM("p_x = " << p_x << ", p_y = " << p_y);
+                ROS_DEBUG_STREAM("alpha = " << alp << ", beta = " << bet << ", gamma = " << gam << ", delta = " << del);
+                if (alp>=0 && alp<=1 && bet>=0 && bet<=1 && gam>=0 && gam<=1 && del>=0 && del<=1 && alp+bet+gam+del>0.99 && alp+bet+gam+del<1.01) { // range should be set as a parameter
+                    ROS_DEBUG_STREAM("obstacle in bounding box");
                     double dist_to_i = sqrt(pow(current_pos_.pose.pose.position.x - p_x, 2) + pow(current_pos_.pose.pose.position.y - p_y, 2));
                     if (dist_to_i < dist_to_obstacle) {
                         obstacle = props_.props[i];
@@ -128,12 +147,25 @@ public:
                 }
             }
         }
+        if (obstacle.prop_label == "obstacle") {
+            ROS_DEBUG_STREAM("Obstacle found at (" << obstacle.vector.x << "," << obstacle.vector.y << ")");
+        }
         return obstacle;
+    }
+
+    void cartesianToBarycentric(double x, double y, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double& alpha, double& beta, double& gamma, double& delta) {
+        double detT = (y2 - y3) * (x1 - x4) + (x3 - x2) * (y1 - y4);
+    
+        alpha = ((y2 - y3) * (x - x4) + (x3 - x2) * (y - y4)) / detT;
+        beta = ((y3 - y1) * (x - x4) + (x1 - x3) * (y - y4)) / detT;
+        gamma = ((y1 - y4) * (x - x4) + (x4 - x1) * (y - y4)) / detT;
+        delta = 1.0 - alpha - beta - gamma;
     }
 
     void avoidObstacle(prop_mapper::Prop obstacle) {
         // store current goal, so we can set goal again when the obstacle is cleared.
         if (!obstacleNearGate(obstacle)) {
+            ROS_DEBUG_STREAM("Obstacle not near gate.");
             task_master::TaskGoalPosition goal = goal_pos_; // only do this if obstacle is not near a gate buoy
             double heading = getGazeboHeading(current_pos_.pose.pose.orientation); // in radians
             double theta;
@@ -148,6 +180,7 @@ public:
             
 
             if (heading < M_PI_2) {
+                ROS_DEBUG_STREAM("Heading into Q1.");
                 theta = heading;
                 wpf_x = obstacle.vector.x + sin(theta);
                 wpf_y = obstacle.vector.y - cos(theta);
@@ -160,6 +193,7 @@ public:
 
             }
             else if (heading >= M_PI_2 && heading < M_PI) {
+                ROS_DEBUG_STREAM("Heading into Q2.");
                 theta = M_PI - heading;
                 wpf_x = obstacle.vector.x + sin(theta);
                 wpf_y = obstacle.vector.y + cos(theta);
@@ -171,6 +205,7 @@ public:
                 wpb_y = obstacle.vector.y - cos(theta);
             }
             else if (heading >= M_PI && heading < (M_PI+M_PI_2)) {
+                ROS_DEBUG_STREAM("Heading into Q3.");
                 theta = heading - M_PI;
                 wpf_x = obstacle.vector.x - sin(theta);
                 wpf_y = obstacle.vector.y + cos(theta);
@@ -182,6 +217,7 @@ public:
                 wpb_y = obstacle.vector.y - cos(theta);
             }
             else { //  heading between 3PI/2 and 2PI
+                ROS_DEBUG_STREAM("Heading into Q4.");
                 theta =  2*M_PI - heading;
                 wpf_x = obstacle.vector.x - sin(theta);
                 wpf_y = obstacle.vector.y - cos(theta);
@@ -193,14 +229,46 @@ public:
                 wpb_y = obstacle.vector.y + cos(theta);
             }
 
-
-            if ((sqrt(pow(current_pos_.pose.pose.position.x - wpl_x, 2) + pow(current_pos_.pose.pose.position.y - wpl_y, 2))) < (sqrt(pow(current_pos_.pose.pose.position.x - wpr_x, 2) + pow(current_pos_.pose.pose.position.y - wpr_y, 2)))) {
-                // go leftt
+            bool atDestination = false;
+            while (!atDestination) {
+                ROS_INFO_STREAM("Publishing front destination, x = " << wpf_x << ", y = " << wpf_y);
                 setDestination(wpf_x, wpf_y);
-                setDestination(wpl_x, wpl_y);
-                setDestination(wpb_x, wpb_y);
-                // return to original goal
-            }            
+                if (wpf_x < current_pos_.pose.pose.position.x+0.1 && wpf_x > current_pos_.pose.pose.position.x-0.1 && wpf_y < current_pos_.pose.pose.position.y+0.1 && wpf_y > current_pos_.pose.pose.position.y-0.1) {
+                    atDestination = true;
+                }
+            }
+
+            atDestination = false;
+            while (!atDestination) {
+                if ((sqrt(pow(current_pos_.pose.pose.position.x - wpl_x, 2) + pow(current_pos_.pose.pose.position.y - wpl_y, 2))) < (sqrt(pow(current_pos_.pose.pose.position.x - wpr_x, 2) + pow(current_pos_.pose.pose.position.y - wpr_y, 2)))) {
+                    // if distance to left is less than distance to right, go left
+                    ROS_DEBUG_STREAM("Shorter distance left.");
+                    ROS_INFO_STREAM("Publishing left destination, x = " << wpl_x << ", y = " << wpl_y);
+                    setDestination(wpl_x, wpl_y);
+                    if (wpl_x < current_pos_.pose.pose.position.x+0.1 && wpl_x > current_pos_.pose.pose.position.x-0.1 && wpl_y < current_pos_.pose.pose.position.y+0.1 && wpl_y > current_pos_.pose.pose.position.y-0.1) {
+                        atDestination = true;
+                    }
+                }
+                else {
+                    // distance to right is less, go right
+                    ROS_DEBUG_STREAM("Shorter distance right.");
+                    ROS_INFO_STREAM("Publishing right destination, x = " << wpr_x << ", y = " << wpr_y);
+                    setDestination(wpr_x, wpr_y);
+                    if (wpr_x < current_pos_.pose.pose.position.x+0.1 && wpr_x > current_pos_.pose.pose.position.x-0.1 && wpr_y < current_pos_.pose.pose.position.y+0.1 && wpr_y > current_pos_.pose.pose.position.y-0.1) {
+                        atDestination = true;
+                    }
+                }
+            }
+
+            atDestination = false;
+            ROS_INFO_STREAM("Publishing back destination, x = " << wpb_x << ", y = " << wpb_y);
+            setDestination(wpb_x, wpb_y);
+            if (wpl_x < current_pos_.pose.pose.position.x+0.1 && wpl_x > current_pos_.pose.pose.position.x-0.1 && wpl_y < current_pos_.pose.pose.position.y+0.1 && wpl_y > current_pos_.pose.pose.position.y-0.1) {
+                atDestination = true;
+            }
+
+            ROS_INFO_STREAM("Returning to orignal waypoint...");
+
         }
 
         // IF OBSTACLE IS NOT NEAR A GATE BUOY (near implies not enough room to pass through as gates can be as small as 6ft, want 1m space for the boat)
@@ -255,8 +323,21 @@ public:
         return false;
     }
 
-    void setDestination(double x, double y) {
+    void setDestination(double dest_x, double dest_y) {
+        task_master::TaskGoalPosition dest;
+        dest.point.x = dest_x;
+        dest.point.y = dest_y;
+        waypoint_.publish(dest);
+    }
 
+    void setObstacle() {
+        prop_mapper::Prop obstacle;
+        obstacle.vector.x = obstacle_x;
+        obstacle.vector.y = obstacle_y;
+        obstacle.prop_label = "obstacle";
+        props_.props.push_back(obstacle);
+        ROS_DEBUG_STREAM("obstacle published.");
+        ROS_DEBUG_STREAM("prop array prop 0 label = " << props_.props[0].prop_label);
     }
 
 private:
@@ -267,6 +348,7 @@ private:
     ros::Subscriber global_pos_;
     ros::Subscriber task_goal_position_;
     ros::Publisher waypoint_;
+    ros::Publisher prop_map_pub_;
 
     nav_msgs::Odometry current_pos_;
     prop_mapper::PropArray props_;
@@ -288,10 +370,11 @@ private:
     void globalPositionCallback(const nav_msgs::Odometry msg) {
         current_pos_ = msg;
         double heading = getGazeboHeading(current_pos_.pose.pose.orientation);
-        ROS_INFO_STREAM("Heading: " << heading);
+        ROS_DEBUG_STREAM("Heading: " << heading);
         // check to see if any props are in the path of the boat.
         prop_mapper::Prop obstacle = findObstacle(); // checks for obstacle within 5 meters, returns prop if it exists
         if (obstacle.prop_label != "no obstacle") { // if obstacle, avoid it
+            ROS_DEBUG_STREAM("Obstacle found, enter avoidance sequence...");
             avoidObstacle(obstacle);
         }
         else {
@@ -311,6 +394,8 @@ int main(int argc, char** argv) {
         ros::console::notifyLoggerLevelsChanged();
 
     ObjectAvoidance object_avoidance;
+
+    object_avoidance.setObstacle();
 
     object_avoidance.spin();
 
