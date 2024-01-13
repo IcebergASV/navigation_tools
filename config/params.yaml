@@ -3,6 +3,8 @@ start_pos_x: 0.0
 start_pos_y: 0.0 
 end_pos_x: 10.0
 end_pos_y: 10.0
+obstacle_x: 7.0
+obstacle_y: 5.0
 
 avoid_left: true
 

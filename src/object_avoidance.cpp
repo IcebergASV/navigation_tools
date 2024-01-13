@@ -17,7 +17,7 @@ public:
         private_nh_.param<double>("start_pos_y", start_pos_y, 0.0); // boat's starting position in y direction
         private_nh_.param<double>("end_pos_x", end_pos_x, 10.0); // boat's goal position in x direction
         private_nh_.param<double>("end_pos_y", end_pos_y, 10.0); // boat's goal position in y direction
-        private_nh_.param<double>("obstacle_x", obstacle_x, 5.5); // obstacle's position in x direction
+        private_nh_.param<double>("obstacle_x", obstacle_x, 7.0); // obstacle's position in x direction
         private_nh_.param<double>("obstacle_y", obstacle_y, 5.0); // obstacle's position in y direction
 
         private_nh_.param<bool>("avoid_left", avoid_left, true); // boolean for what is the default direction to avoid (is this even needed?)
@@ -50,8 +50,8 @@ public:
         ROS_DEBUG_STREAM("BEFORE GET HEADING.");
         double heading = getGazeboHeading(current_pos_.pose.pose.orientation); // in radians
         ROS_DEBUG_STREAM("AFTER GET HEADING.");
-        double theta;
-        double gamma;
+        //double theta;
+        double angle;
         double a_x;
         double a_y;
         double b_x;
@@ -63,22 +63,24 @@ public:
 
         if (heading < M_PI_2) {
             ROS_DEBUG_STREAM("heading < 90deg.");
-            theta = heading;
-            gamma = M_PI_2 - theta;
-            a_x = current_pos_.pose.pose.position.x - (1.335 * sin(gamma));
-            a_y = current_pos_.pose.pose.position.y - (1.335 * cos(gamma));
-            b_x = a_x - (5 * cos(gamma));
-            b_y = a_y + (5 * sin(gamma));
-            d_x = current_pos_.pose.pose.position.x + (1.335 * cos(theta));
-            d_y = current_pos_.pose.pose.position.y + (1.335 * sin(theta));
-            c_x = d_x - (5 * sin(theta));
-            c_y = d_y + (5 * cos(theta));
+            //theta = heading;
+            angle = M_PI_2 - heading;
+            a_x = current_pos_.pose.pose.position.x - (1.335 * cos(angle));
+            a_y = current_pos_.pose.pose.position.y + (1.335 * sin(angle));
+            b_x = a_x + (5 * sin(angle));
+            b_y = a_y + (5 * cos(angle));
+            c_x = b_x + (2.67 * cos(angle));
+            c_y = b_y - (2.67 * sin(angle));
+            d_x = c_x - (5 * sin(angle));
+            d_y = c_y - (5 * cos(angle));
             ROS_DEBUG_STREAM("a = " << a_x << "," << a_y << ", b = " << b_x << "," << b_y << ", c = " << c_x << "," << c_y << ", d = " << d_x << "," << d_y);
         }
+        // following need to be entirely rewritten
+        /*
         else if (heading >= M_PI_2 && heading < M_PI) {
             ROS_DEBUG_STREAM("90deg < heading < 180deg.");
-            theta = M_PI - heading;
-            gamma = M_PI_2 - theta;
+            //theta = M_PI - heading;
+            angle = M_PI_2 - heading;
             a_x = current_pos_.pose.pose.position.x + (1.335 * cos(theta));
             a_y = current_pos_.pose.pose.position.y - (1.335 * sin(theta));
             b_x = a_x - (5 * sin(theta));
@@ -114,31 +116,22 @@ public:
             c_x = d_x + (5 * cos(gamma));
             c_y = d_y + (5 * sin(gamma));
         }
+        */
 
 
-        for (int i = 0; i < sizeof(props_.props); i++) {
+        for (int i = 0; i < props_.props.size(); i++) {
             ROS_DEBUG_STREAM("in for-loop.");
             if (props_.props[i].prop_label == "obstacle") {
                 ROS_DEBUG_STREAM("found obstacle");
                 double p_x = props_.props[i].vector.x;
                 double p_y = props_.props[i].vector.y;
-                double alp, bet, gam, del;
 
-                // determine barycentric coordinates
-                //double bary_a = ((c_y-d_y)*(p_x-d_x)+(d_x-c_x)*(p_y-d_y))/((c_y-d_y)*(a_x-d_x)+(d_x-c_x)*(a_y-d_y));
-                //double bary_b = ((d_y-a_y)*(p_x-d_x)+(a_x-d_x)*(p_y-d_y))/((c_y-d_y)*(a_x-d_x)+(d_x-c_x)*(a_y-d_y));
-                //double bary_c = ((a_y-b_y)*(p_x-a_x)+(b_x-a_x)*(p_y-a_y))/((a_y-b_y)*(c_x-a_x)+(b_x-a_x)*(c_y-a_y));
-                //double bary_d = ((b_y-c_y)*(p_x-a_x)+(c_x-a_x)*(p_y-a_y))/((a_y-b_y)*(c_x-a_x)+(b_x-a_x)*(c_y-a_y));
-
-                cartesianToBarycentric(p_x, p_y, a_x, a_y, b_x, b_y, c_x, c_y, d_x, d_y, alp, bet, gam, del);
+                bool obstacle_in_path = pointInsideRotatedRectangle(p_x,p_y,a_x,a_y,b_x,b_y,c_x,c_y,d_x,d_y);
 
                 // if prop within 5 meters of the front of the boat and prop label == 'obstacle' and distance to the obstacle < dist_to_obstacle
                     // then props_[i] is the closest obstacle to the boat
-                // if a,b,c,d between 0 and 1 and a+b+c+d=1, then prop is an obstacle that needs to be avoided
-                ROS_DEBUG_STREAM("found barycentric co-ords");
-                ROS_DEBUG_STREAM("p_x = " << p_x << ", p_y = " << p_y);
-                ROS_DEBUG_STREAM("alpha = " << alp << ", beta = " << bet << ", gamma = " << gam << ", delta = " << del);
-                if (alp>=0 && alp<=1 && bet>=0 && bet<=1 && gam>=0 && gam<=1 && del>=0 && del<=1 && alp+bet+gam+del>0.99 && alp+bet+gam+del<1.01) { // range should be set as a parameter
+
+                if (obstacle_in_path) { // range should be set as a parameter
                     ROS_DEBUG_STREAM("obstacle in bounding box");
                     double dist_to_i = sqrt(pow(current_pos_.pose.pose.position.x - p_x, 2) + pow(current_pos_.pose.pose.position.y - p_y, 2));
                     if (dist_to_i < dist_to_obstacle) {
@@ -153,13 +146,20 @@ public:
         return obstacle;
     }
 
-    void cartesianToBarycentric(double x, double y, double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double& alpha, double& beta, double& gamma, double& delta) {
-        double detT = (y2 - y3) * (x1 - x4) + (x3 - x2) * (y1 - y4);
-    
-        alpha = ((y2 - y3) * (x - x4) + (x3 - x2) * (y - y4)) / detT;
-        beta = ((y3 - y1) * (x - x4) + (x1 - x3) * (y - y4)) / detT;
-        gamma = ((y1 - y4) * (x - x4) + (x4 - x1) * (y - y4)) / detT;
-        delta = 1.0 - alpha - beta - gamma;
+    bool pointInsideRotatedRectangle(double px, double py, double ax, double ay, double bx, double by, double cx, double cy, double dx, double dy) {
+        double APx = px - ax;
+        double APy = py - ay;
+        double ABx = bx - ax;
+        double ABy = by - ay;
+        double ADx = dx - ax;
+        double ADy = dy - ay;
+
+        double dotAPAB = APx * ABx + APy * ABy;
+        double dotABAB = ABx * ABx + ABy * ABy;
+        double dotAPAD = APx * ADx + APy * ADy;
+        double dotADAD = ADx * ADx + ADy * ADy;
+
+        return (0 <= dotAPAB && dotAPAB <= dotABAB && 0 <= dotAPAD && dotAPAD <= dotADAD);
     }
 
     void avoidObstacle(prop_mapper::Prop obstacle) {
@@ -312,7 +312,7 @@ public:
     }
 
     bool obstacleNearGate(prop_mapper::Prop obstacle) {
-        for (int i = 0; i < sizeof(props_.props); i++) {
+        for (int i = 0; i < props_.props.size(); i++) {
             if (props_.props[i].prop_label == "gate_buoy") {
                 if ((sqrt(pow(props_.props[i].vector.x - obstacle.vector.x, 2) + pow(props_.props[i].vector.y - obstacle.vector.y, 2))) <= 1) {
                     ROS_INFO_STREAM("gate close to buoy");
