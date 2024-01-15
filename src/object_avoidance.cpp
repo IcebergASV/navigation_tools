@@ -4,6 +4,7 @@
 #include <prop_mapper/PropArray.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <cmath>
 
 
@@ -75,48 +76,43 @@ public:
             d_y = c_y - (5 * cos(angle));
             ROS_DEBUG_STREAM("a = " << a_x << "," << a_y << ", b = " << b_x << "," << b_y << ", c = " << c_x << "," << c_y << ", d = " << d_x << "," << d_y);
         }
-        // following need to be entirely rewritten
-        /*
         else if (heading >= M_PI_2 && heading < M_PI) {
             ROS_DEBUG_STREAM("90deg < heading < 180deg.");
-            //theta = M_PI - heading;
-            angle = M_PI_2 - heading;
-            a_x = current_pos_.pose.pose.position.x + (1.335 * cos(theta));
-            a_y = current_pos_.pose.pose.position.y - (1.335 * sin(theta));
-            b_x = a_x - (5 * sin(theta));
-            b_y = a_y - (5 * cos(theta));
-            d_x = current_pos_.pose.pose.position.x - (1.335 * sin(gamma));
-            d_y = current_pos_.pose.pose.position.y + (1.335 * cos(gamma));
-            c_x = d_x - (5 * cos(gamma));
-            c_y = d_y - (5 * sin(gamma));
+            angle = M_PI - heading;
+            a_x = current_pos_.pose.pose.position.x - (1.335 * cos(angle));
+            a_y = current_pos_.pose.pose.position.y - (1.335 * sin(angle));
+            b_x = a_x - (5 * sin(angle));
+            b_y = a_y + (5 * cos(angle));
+            c_x = b_x + (2.67 * cos(angle));
+            c_y = b_y + (2.67 * sin(angle));
+            d_x = c_x + (5 * sin(angle));
+            d_y = c_y - (5 * cos(angle));
         }
         else if (heading >= M_PI && heading < (M_PI+M_PI_2)) {
             ROS_DEBUG_STREAM("180deg < heading < 270deg.");
-            theta = heading - M_PI;
-            gamma = M_PI_2 - theta;
-            a_x = current_pos_.pose.pose.position.x + (1.335 * sin(gamma));
-            a_y = current_pos_.pose.pose.position.y + (1.335 * cos(gamma));
-            b_x = a_x + (5 * cos(gamma));
-            b_y = a_y + (5 * sin(gamma));
-            d_x = current_pos_.pose.pose.position.x - (1.335 * cos(theta));
-            d_y = current_pos_.pose.pose.position.y - (1.335 * sin(theta));
-            c_x = d_x + (5 * sin(gamma));
-            c_y = d_y - (5 * cos(gamma));
+            angle = M_PI + M_PI_2 - heading;
+            a_x = current_pos_.pose.pose.position.x + (1.335 * cos(angle));
+            a_y = current_pos_.pose.pose.position.y - (1.335 * sin(angle));
+            b_x = a_x - (5 * sin(angle));
+            b_y = a_y - (5 * cos(angle));
+            c_x = b_x - (2.67 * cos(angle));
+            c_y = b_y + (2.67 * sin(angle));
+            d_x = c_x + (5 * sin(angle));
+            d_y = c_y + (5 * cos(angle));
         }
         else { //  heading between 3PI/2 and 2PI
-        ROS_DEBUG_STREAM("270deg < heading < 360deg.");
-            theta =  2*M_PI - heading;
-            gamma = M_PI_2 - theta;
-            a_x = current_pos_.pose.pose.position.x - (1.335 * cos(theta));
-            a_y = current_pos_.pose.pose.position.y + (1.335 * sin(theta));
-            b_x = a_x + (5 * sin(theta));
-            b_y = a_y + (5 * cos(theta));
-            d_x = current_pos_.pose.pose.position.x + (1.335 * sin(gamma));
-            d_y = current_pos_.pose.pose.position.y - (1.335 * cos(gamma));
-            c_x = d_x + (5 * cos(gamma));
-            c_y = d_y + (5 * sin(gamma));
+            ROS_DEBUG_STREAM("270deg < heading < 360deg.");
+            angle = 2*M_PI - heading;
+            a_x = current_pos_.pose.pose.position.x + (1.335 * cos(angle));
+            a_y = current_pos_.pose.pose.position.y + (1.335 * sin(angle));
+            b_x = a_x + (5 * sin(angle));
+            b_y = a_y - (5 * cos(angle));
+            c_x = b_x - (2.67 * cos(angle));
+            c_y = b_y - (2.67 * sin(angle));
+            d_x = c_x - (5 * sin(angle));
+            d_y = c_y + (5 * cos(angle));
         }
-        */
+        
 
 
         for (int i = 0; i < props_.props.size(); i++) {
@@ -230,41 +226,65 @@ public:
             }
 
             bool atDestination = false;
+            setDestination(wpf_x, wpf_y);
             while (!atDestination) {
+                ROS_INFO_STREAM("current = (" << current_pos_.pose.pose.position.x << "," << current_pos_.pose.pose.position.y << ")");
+                ROS_INFO_STREAM("wpf = (" << wpf_x << "," << wpf_y << ")");
+                if (current_pos_.pose.pose.position.x < wpf_x+0.1 & current_pos_.pose.pose.position.x > wpf_x-0.1) {
+                    ROS_INFO_STREAM("good x");
+                    if (current_pos_.pose.pose.position.y < wpf_y+0.1 & current_pos_.pose.pose.position.y > wpf_y-0.1) {
+                        ROS_INFO_STREAM("good x and y");
+                        atDestination = true;
+                    }
+                }
                 ROS_INFO_STREAM("Publishing front destination, x = " << wpf_x << ", y = " << wpf_y);
-                setDestination(wpf_x, wpf_y);
-                if (wpf_x < current_pos_.pose.pose.position.x+0.1 && wpf_x > current_pos_.pose.pose.position.x-0.1 && wpf_y < current_pos_.pose.pose.position.y+0.1 && wpf_y > current_pos_.pose.pose.position.y-0.1) {
-                    atDestination = true;
-                }
+                ros::Rate rate(10);
+                rate.sleep();
             }
 
             atDestination = false;
-            while (!atDestination) {
-                if ((sqrt(pow(current_pos_.pose.pose.position.x - wpl_x, 2) + pow(current_pos_.pose.pose.position.y - wpl_y, 2))) < (sqrt(pow(current_pos_.pose.pose.position.x - wpr_x, 2) + pow(current_pos_.pose.pose.position.y - wpr_y, 2)))) {
-                    // if distance to left is less than distance to right, go left
-                    ROS_DEBUG_STREAM("Shorter distance left.");
+            if ((sqrt(pow(current_pos_.pose.pose.position.x - wpl_x, 2) + pow(current_pos_.pose.pose.position.y - wpl_y, 2))) < (sqrt(pow(current_pos_.pose.pose.position.x - wpr_x, 2) + pow(current_pos_.pose.pose.position.y - wpr_y, 2)))) {
+                // if distance to left is less than distance to right, go left
+                ROS_DEBUG_STREAM("Shorter distance left.");
+                setDestination(wpl_x, wpl_y);
+                while (!atDestination) {
+                    if (current_pos_.pose.pose.position.x < wpl_x+0.1 & current_pos_.pose.pose.position.x > wpl_x-0.1) {
+                        if (current_pos_.pose.pose.position.y < wpl_y+0.1 & current_pos_.pose.pose.position.y > wpl_y-0.1) {
+                            atDestination = true;
+                        }
+                    }
                     ROS_INFO_STREAM("Publishing left destination, x = " << wpl_x << ", y = " << wpl_y);
-                    setDestination(wpl_x, wpl_y);
-                    if (wpl_x < current_pos_.pose.pose.position.x+0.1 && wpl_x > current_pos_.pose.pose.position.x-0.1 && wpl_y < current_pos_.pose.pose.position.y+0.1 && wpl_y > current_pos_.pose.pose.position.y-0.1) {
-                        atDestination = true;
-                    }
+                    ros::Rate rate(10);
+                    rate.sleep();
                 }
-                else {
-                    // distance to right is less, go right
-                    ROS_DEBUG_STREAM("Shorter distance right.");
-                    ROS_INFO_STREAM("Publishing right destination, x = " << wpr_x << ", y = " << wpr_y);
-                    setDestination(wpr_x, wpr_y);
-                    if (wpr_x < current_pos_.pose.pose.position.x+0.1 && wpr_x > current_pos_.pose.pose.position.x-0.1 && wpr_y < current_pos_.pose.pose.position.y+0.1 && wpr_y > current_pos_.pose.pose.position.y-0.1) {
-                        atDestination = true;
+            }
+            else {
+                // distance to right is less, go right
+                ROS_DEBUG_STREAM("Shorter distance right.");
+                setDestination(wpr_x, wpr_y);
+                while(!atDestination) {
+                    if (current_pos_.pose.pose.position.x < wpr_x+0.1 & current_pos_.pose.pose.position.x > wpr_x-0.1) {
+                        if (current_pos_.pose.pose.position.y < wpr_y+0.1 & current_pos_.pose.pose.position.y > wpr_y-0.1) {
+                            atDestination = true;
+                        }
                     }
+                    ROS_INFO_STREAM("Publishing right destination, x = " << wpr_x << ", y = " << wpr_y);
+                    ros::Rate rate(10);
+                    rate.sleep();
                 }
             }
 
             atDestination = false;
-            ROS_INFO_STREAM("Publishing back destination, x = " << wpb_x << ", y = " << wpb_y);
             setDestination(wpb_x, wpb_y);
-            if (wpl_x < current_pos_.pose.pose.position.x+0.1 && wpl_x > current_pos_.pose.pose.position.x-0.1 && wpl_y < current_pos_.pose.pose.position.y+0.1 && wpl_y > current_pos_.pose.pose.position.y-0.1) {
-                atDestination = true;
+            while(!atDestination) {
+                if (current_pos_.pose.pose.position.x < wpb_x+0.1 & current_pos_.pose.pose.position.x > wpb_x-0.1) {
+                    if (current_pos_.pose.pose.position.y < wpb_y+0.1 & current_pos_.pose.pose.position.y > wpb_y-0.1) {
+                        atDestination = true;
+                    }
+                }
+                ROS_INFO_STREAM("Publishing back destination, x = " << wpb_x << ", y = " << wpb_y);
+                ros::Rate rate(10);
+                rate.sleep();
             }
 
             ROS_INFO_STREAM("Returning to orignal waypoint...");
